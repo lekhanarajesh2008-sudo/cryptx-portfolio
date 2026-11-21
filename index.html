@@ -1,0 +1,717 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CRYPTX Interactive Portfolio</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { background:#080d19; color:#f4f6ff; font-family:Arial,sans-serif; padding:25px; }
+.container { max-width:1450px; margin:auto; }
+header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px; margin-bottom:28px; }
+.brand { display:flex; align-items:center; gap:12px; }
+.logo { width:45px; height:45px; border-radius:13px; display:grid; place-items:center; background:linear-gradient(135deg,#4779ff,#824cff); font-size:25px; }
+.brand p,.welcome p,.muted { color:#8996b3; }
+.brand p { font-size:12px; margin-top:5px; }
+.status { background:#102b29; color:#38d9a9; border-radius:20px; padding:10px 15px; font-size:12px; }
+.welcome { margin-bottom:25px; }
+.welcome h2 { margin-bottom:9px; }
+.welcome p { font-size:14px; margin-top:7px; }
+.positive { color:#39d99b; }
+.negative { color:#ff6d82; }
+.dashboard-grid { display:grid; grid-template-columns:1.15fr .85fr; gap:18px; }
+.left-column,.right-column { display:flex; flex-direction:column; gap:18px; min-width:0; }
+.panel { background:#111a2b; border:1px solid #202e47; border-radius:18px; padding:20px; min-width:0; }
+.panel-heading { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:20px; }
+.panel-heading h3 { font-size:16px; }
+.muted { font-size:12px; }
+.coin-list { display:flex; flex-direction:column; gap:13px; }
+.coin-card { display:grid; grid-template-columns:50px 1fr auto; gap:12px; align-items:center; background:#192438; border:1px solid #273650; border-radius:14px; padding:16px; }
+.coin-icon { width:45px; height:45px; border-radius:50%; display:grid; place-items:center; font-size:23px; }
+.btc-icon { background:#56391b; color:#ffae32; }
+.eth-icon { background:#252d61; color:#9baeff; }
+.sol-icon { background:#183e3c; color:#5ce4c1; }
+.coin-info h4 { font-size:14px; margin-bottom:7px; }
+.coin-info p { color:#98a7c2; font-size:12px; margin-top:5px; }
+.coin-value { text-align:right; }
+.coin-value h3 { font-size:16px; margin-bottom:7px; }
+.coin-value p { font-size:12px; color:#99a7c2; }
+.holding-editor { margin-top:12px; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+.holding-editor label { color:#8997b3; font-size:11px; }
+input,select { background:#0d1729; color:white; border:1px solid #405273; border-radius:7px; padding:10px; outline:none; width:100%; }
+input:focus,select:focus { border-color:#668cff; }
+.holding-editor input { width:95px; padding:7px; }
+button { border:none; background:#355cbd; color:white; padding:9px 13px; border-radius:7px; cursor:pointer; }
+button:hover { background:#4779e8; }
+.allocation-layout { display:grid; grid-template-columns:1fr 1fr; align-items:center; gap:15px; }
+.donut-container { height:190px; position:relative; }
+.allocation-legend { display:flex; flex-direction:column; gap:17px; }
+.legend-row { display:flex; justify-content:space-between; gap:8px; font-size:12px; color:#b9c5dc; }
+.legend-name { display:flex; align-items:center; gap:8px; }
+.dot { width:9px; height:9px; border-radius:50%; }
+.btc-dot { background:#f7931a; }
+.eth-dot { background:#668cff; }
+.sol-dot { background:#35d49a; }
+.chart-container { width:100%; height:260px; position:relative; }
+.mover-list { display:flex; flex-direction:column; gap:16px; }
+.mover { display:flex; justify-content:space-between; align-items:center; }
+.mover-left { display:flex; align-items:center; gap:10px; }
+.mini-icon { width:34px; height:34px; border-radius:50%; display:grid; place-items:center; font-weight:bold; }
+.mover-name { font-size:13px; }
+.mover-symbol { color:#8997b3; font-size:11px; margin-top:4px; }
+.mover-change { font-size:13px; font-weight:bold; }
+.analysis-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+.analysis-item { background:#192438; padding:15px; border-radius:12px; }
+.analysis-item p { font-size:12px; color:#8997b3; margin-bottom:9px; }
+.analysis-item h4 { font-size:14px; }
+.transaction-form { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+.form-field label { display:block; font-size:12px; color:#aab7d0; margin-bottom:7px; }
+.transaction-form button { grid-column:1/-1; padding:12px; }
+.form-note { color:#8997b3; font-size:12px; margin-top:12px; }
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; min-width:560px; font-size:12px; }
+th,td { padding:13px 10px; text-align:left; border-bottom:1px solid #273650; }
+th { color:#8997b3; font-weight:normal; }
+td { color:#dce5f7; }
+.buy-text { color:#39d99b; font-weight:bold; }
+.sell-text { color:#ff6d82; font-weight:bold; }
+.empty-history { color:#8997b3; font-size:13px; padding:15px 0; }
+footer { text-align:center; margin-top:30px; color:#687795; font-size:12px; }
+@media(max-width:900px) { .dashboard-grid { grid-template-columns:1fr; } }
+@media(max-width:550px) {
+ body { padding:13px; }
+ .coin-card { grid-template-columns:43px 1fr; }
+ .coin-value { grid-column:2; text-align:left; }
+ .allocation-layout,.analysis-grid,.transaction-form { grid-template-columns:1fr; }
+ .transaction-form button { grid-column:1; }
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<header>
+ <div class="brand">
+  <div class="logo">₿</div>
+  <div>
+   <h1>CRYPTX PORTFOLIO</h1>
+   <p>Crypto Intelligence Platform</p>
+  </div>
+ </div>
+ <div class="status" id="connection-status">● Checking connection...</div>
+</header>
+
+<div class="welcome">
+ <h2>Welcome, User! 👋</h2>
+ <p>Total Portfolio Balance: <strong id="total-balance">$0.00</strong></p>
+ <p id="portfolio-note">Your portfolio is ready.</p>
+</div>
+
+<div class="dashboard-grid">
+<div class="left-column">
+
+<section class="panel">
+ <div class="panel-heading">
+  <h3>My Crypto Assets</h3>
+  <span class="muted">Editable Holdings</span>
+ </div>
+ <div class="coin-list">
+
+  <div class="coin-card">
+   <div class="coin-icon btc-icon">₿</div>
+   <div class="coin-info">
+    <h4>Bitcoin (BTC)</h4>
+    <p>Price: <span id="bitcoin-price">Loading...</span></p>
+    <p>Value: <span id="bitcoin-value">Loading...</span></p>
+    <div class="holding-editor">
+     <label for="btc-holding">BTC quantity</label>
+     <input id="btc-holding" type="number" min="0" step="any">
+     <button onclick="updateHoldings()">Update</button>
+    </div>
+   </div>
+   <div class="coin-value">
+    <h3 id="bitcoin-change">--</h3><p>24H Change</p>
+   </div>
+  </div>
+
+  <div class="coin-card">
+   <div class="coin-icon eth-icon">◆</div>
+   <div class="coin-info">
+    <h4>Ethereum (ETH)</h4>
+    <p>Price: <span id="ethereum-price">Loading...</span></p>
+    <p>Value: <span id="ethereum-value">Loading...</span></p>
+    <div class="holding-editor">
+     <label for="eth-holding">ETH quantity</label>
+     <input id="eth-holding" type="number" min="0" step="any">
+     <button onclick="updateHoldings()">Update</button>
+    </div>
+   </div>
+   <div class="coin-value">
+    <h3 id="ethereum-change">--</h3><p>24H Change</p>
+   </div>
+  </div>
+
+  <div class="coin-card">
+   <div class="coin-icon sol-icon">◎</div>
+   <div class="coin-info">
+    <h4>Solana (SOL)</h4>
+    <p>Price: <span id="solana-price">Loading...</span></p>
+    <p>Value: <span id="solana-value">Loading...</span></p>
+    <div class="holding-editor">
+     <label for="sol-holding">SOL quantity</label>
+     <input id="sol-holding" type="number" min="0" step="any">
+     <button onclick="updateHoldings()">Update</button>
+    </div>
+   </div>
+   <div class="coin-value">
+    <h3 id="solana-change">--</h3><p>24H Change</p>
+   </div>
+  </div>
+
+ </div>
+</section>
+
+<section class="panel">
+ <div class="panel-heading">
+  <h3>Asset Allocation</h3><span class="muted">Portfolio Share</span>
+ </div>
+ <div class="allocation-layout">
+  <div class="donut-container"><canvas id="allocationChart"></canvas></div>
+  <div class="allocation-legend">
+   <div class="legend-row"><span class="legend-name"><span class="dot btc-dot"></span> BTC</span><strong id="btc-share">0%</strong></div>
+   <div class="legend-row"><span class="legend-name"><span class="dot eth-dot"></span> ETH</span><strong id="eth-share">0%</strong></div>
+   <div class="legend-row"><span class="legend-name"><span class="dot sol-dot"></span> SOL</span><strong id="sol-share">0%</strong></div>
+  </div>
+ </div>
+</section>
+
+</div>
+
+<div class="right-column">
+
+<section class="panel">
+ <div class="panel-heading">
+  <h3>Portfolio Performance</h3><span class="muted">24 Hours</span>
+ </div>
+ <div class="chart-container"><canvas id="portfolioChart"></canvas></div>
+</section>
+
+<section class="panel">
+ <div class="panel-heading">
+  <h3>Top Movers</h3><span class="muted">24H Performance</span>
+ </div>
+ <div class="mover-list" id="mover-list"><p class="muted">Loading market movements...</p></div>
+</section>
+
+<section class="panel">
+ <div class="panel-heading">
+  <h3>Market Intelligence</h3><span class="muted">Analysis</span>
+ </div>
+ <div class="analysis-grid">
+  <div class="analysis-item"><p>Market Trend</p><h4 id="market-trend">Loading...</h4></div>
+  <div class="analysis-item"><p>Prediction</p><h4 id="market-prediction">Loading...</h4></div>
+  <div class="analysis-item"><p>Risk Level</p><h4 id="risk-level">Loading...</h4></div>
+ </div>
+</section>
+
+</div>
+</div>
+
+<!-- STEP 19: TRANSACTION FORM -->
+
+<section class="panel" style="margin-top:18px;">
+ <div class="panel-heading">
+  <h3>Buy / Sell Crypto</h3>
+  <span class="muted">Record a transaction</span>
+ </div>
+
+ <div class="transaction-form">
+  <div class="form-field">
+   <label for="transaction-type">Transaction Type</label>
+   <select id="transaction-type">
+    <option value="Buy">Buy</option>
+    <option value="Sell">Sell</option>
+   </select>
+  </div>
+
+  <div class="form-field">
+   <label for="transaction-coin">Cryptocurrency</label>
+   <select id="transaction-coin">
+    <option value="bitcoin">Bitcoin (BTC)</option>
+    <option value="ethereum">Ethereum (ETH)</option>
+    <option value="solana">Solana (SOL)</option>
+   </select>
+  </div>
+
+  <div class="form-field">
+   <label for="transaction-quantity">Quantity</label>
+   <input id="transaction-quantity" type="number" min="0" step="any" placeholder="Example: 0.10">
+  </div>
+
+  <div class="form-field">
+   <label for="transaction-price">Price per coin (USD)</label>
+   <input id="transaction-price" type="number" min="0" step="any" placeholder="Example: 95000">
+  </div>
+
+  <button onclick="addTransaction()">Add Transaction</button>
+ </div>
+
+ <p class="form-note" id="transaction-message">Enter the transaction details and click Add Transaction.</p>
+</section>
+
+<!-- TRANSACTION HISTORY -->
+
+<section class="panel" style="margin-top:18px;">
+ <div class="panel-heading">
+  <h3>Transaction History</h3>
+  <span class="muted" id="transaction-count">0 transactions</span>
+ </div>
+ <div class="table-wrap">
+  <table>
+   <thead>
+    <tr>
+     <th>Date</th>
+     <th>Type</th>
+     <th>Asset</th>
+     <th>Quantity</th>
+     <th>Price</th>
+     <th>Total</th>
+    </tr>
+   </thead>
+   <tbody id="transaction-list">
+    <tr><td colspan="6" class="empty-history">No transactions yet.</td></tr>
+   </tbody>
+  </table>
+ </div>
+</section>
+
+<footer>
+ CRYPTX PORTFOLIO · Crypto Intelligence Dashboard<br>
+ Market data powered by CoinGecko · Sample portfolio only
+</footer>
+
+</div>
+
+<script>
+
+// SAVED PORTFOLIO DATA
+
+const HOLDINGS_KEY = "cryptx_portfolio_holdings";
+const TRANSACTIONS_KEY = "cryptx_transactions";
+
+const defaultHoldings = {
+ bitcoin: 0.45,
+ ethereum: 2.30,
+ solana: 48
+};
+
+function loadHoldings() {
+ try {
+  const saved = JSON.parse(localStorage.getItem(HOLDINGS_KEY));
+  if (saved &&
+      Number.isFinite(saved.bitcoin) && saved.bitcoin >= 0 &&
+      Number.isFinite(saved.ethereum) && saved.ethereum >= 0 &&
+      Number.isFinite(saved.solana) && saved.solana >= 0) {
+   return saved;
+  }
+ } catch(error) {
+  console.error(error);
+ }
+ return {...defaultHoldings};
+}
+
+function loadTransactions() {
+ try {
+  const saved = JSON.parse(localStorage.getItem(TRANSACTIONS_KEY));
+  return Array.isArray(saved) ? saved : [];
+ } catch(error) {
+  console.error(error);
+  return [];
+ }
+}
+
+let holdings = loadHoldings();
+let transactions = loadTransactions();
+let marketData = null;
+let historyData = null;
+let allocationChart = null;
+let portfolioChart = null;
+
+document.getElementById("btc-holding").value = holdings.bitcoin;
+document.getElementById("eth-holding").value = holdings.ethereum;
+document.getElementById("sol-holding").value = holdings.solana;
+
+function money(value) {
+ return "$" + Number(value).toLocaleString("en-US", {
+  minimumFractionDigits:2,
+  maximumFractionDigits:2
+ });
+}
+
+function saveHoldings() {
+ localStorage.setItem(HOLDINGS_KEY, JSON.stringify(holdings));
+}
+
+function saveTransactions() {
+ localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
+}
+
+// MANUAL HOLDINGS UPDATE
+
+function updateHoldings() {
+ const btc = Number(document.getElementById("btc-holding").value);
+ const eth = Number(document.getElementById("eth-holding").value);
+ const sol = Number(document.getElementById("sol-holding").value);
+
+ if (
+  document.getElementById("btc-holding").value.trim() === "" ||
+  document.getElementById("eth-holding").value.trim() === "" ||
+  document.getElementById("sol-holding").value.trim() === "" ||
+  !Number.isFinite(btc) || btc < 0 ||
+  !Number.isFinite(eth) || eth < 0 ||
+  !Number.isFinite(sol) || sol < 0
+ ) {
+  alert("Please enter valid quantities of zero or more.");
+  return;
+ }
+
+ holdings = {bitcoin:btc, ethereum:eth, solana:sol};
+ saveHoldings();
+
+ document.getElementById("portfolio-note").textContent =
+  "✓ Your portfolio has been saved in this browser.";
+
+ renderPortfolio();
+ renderPortfolioHistory();
+}
+
+// STEP 19: ADD BUY OR SELL TRANSACTION
+
+function addTransaction() {
+ const type = document.getElementById("transaction-type").value;
+ const coin = document.getElementById("transaction-coin").value;
+ const quantityText = document.getElementById("transaction-quantity").value;
+ const priceText = document.getElementById("transaction-price").value;
+
+ const quantity = Number(quantityText);
+ const price = Number(priceText);
+
+ const message = document.getElementById("transaction-message");
+
+ if (
+  quantityText.trim() === "" ||
+  priceText.trim() === "" ||
+  !Number.isFinite(quantity) || quantity <= 0 ||
+  !Number.isFinite(price) || price <= 0
+ ) {
+  message.textContent = "Please enter a valid quantity and price greater than zero.";
+  message.style.color = "#ff6d82";
+  return;
+ }
+
+ if (type === "Sell" && quantity > holdings[coin]) {
+  message.textContent = "You cannot sell more coins than you currently hold.";
+  message.style.color = "#ff6d82";
+  return;
+ }
+
+ // Update the user's holdings
+ if (type === "Buy") {
+  holdings[coin] += quantity;
+ } else {
+  holdings[coin] -= quantity;
+ }
+
+ // Save the transaction
+ const transaction = {
+  id: Date.now(),
+  type: type,
+  coin: coin,
+  quantity: quantity,
+  price: price,
+  total: quantity * price,
+  date: new Date().toLocaleString()
+ };
+
+ transactions.unshift(transaction);
+
+ // Save both holdings and transaction history
+ saveHoldings();
+ saveTransactions();
+
+ // Update the input fields
+ document.getElementById("btc-holding").value = holdings.bitcoin;
+ document.getElementById("eth-holding").value = holdings.ethereum;
+ document.getElementById("sol-holding").value = holdings.solana;
+
+ // Update dashboard
+ renderPortfolio();
+ renderPortfolioHistory();
+ renderTransactions();
+
+ message.textContent =
+  "✓ " + type + " transaction recorded and portfolio updated!";
+
+ message.style.color = "#39d99b";
+
+ document.getElementById("transaction-quantity").value = "";
+ document.getElementById("transaction-price").value = "";
+}
+
+// DISPLAY TRANSACTION HISTORY
+
+function renderTransactions() {
+ const list = document.getElementById("transaction-list");
+
+ document.getElementById("transaction-count").textContent =
+  transactions.length + (transactions.length === 1 ? " transaction" : " transactions");
+
+ if (transactions.length === 0) {
+  list.innerHTML = '<tr><td colspan="6" class="empty-history">No transactions yet.</td></tr>';
+  return;
+ }
+
+ const names = {
+  bitcoin:"Bitcoin (BTC)",
+  ethereum:"Ethereum (ETH)",
+  solana:"Solana (SOL)"
+ };
+
+ list.innerHTML = transactions.map(transaction => `
+  <tr>
+   <td>${transaction.date}</td>
+   <td class="${transaction.type === "Buy" ? "buy-text" : "sell-text"}">${transaction.type}</td>
+   <td>${names[transaction.coin] || transaction.coin}</td>
+   <td>${Number(transaction.quantity).toLocaleString()}</td>
+   <td>${money(transaction.price)}</td>
+   <td>${money(transaction.total)}</td>
+  </tr>
+ `).join("");
+}
+
+// BACKEND CONNECTION
+
+async function checkBackend() {
+ const status = document.getElementById("connection-status");
+ try {
+  const response = await fetch("http://127.0.0.1:8000/health");
+  if (!response.ok) throw new Error("Backend unavailable");
+  status.textContent = "● Backend Connected";
+  status.style.background = "#102b29";
+  status.style.color = "#38d9a9";
+ } catch(error) {
+  status.textContent = "● Backend Disconnected";
+  status.style.background = "#351923";
+  status.style.color = "#ff657c";
+ }
+}
+
+// MARKET DATA
+
+async function loadMarkets() {
+ try {
+  const response = await fetch("http://127.0.0.1:8000/markets");
+  if (!response.ok) throw new Error("Market data unavailable");
+  marketData = await response.json();
+  renderPortfolio();
+ } catch(error) {
+  console.error("Market error:", error);
+ }
+}
+
+// PORTFOLIO CALCULATION
+
+function showChange(id,value) {
+ const element = document.getElementById(id);
+ element.textContent = Number(value).toFixed(2) + "%";
+ element.className = Number(value) >= 0 ? "positive" : "negative";
+}
+
+function renderPortfolio() {
+ if (!marketData) return;
+
+ const btcValue = holdings.bitcoin * marketData.bitcoin.usd;
+ const ethValue = holdings.ethereum * marketData.ethereum.usd;
+ const solValue = holdings.solana * marketData.solana.usd;
+ const total = btcValue + ethValue + solValue;
+
+ document.getElementById("bitcoin-price").textContent = money(marketData.bitcoin.usd);
+ document.getElementById("ethereum-price").textContent = money(marketData.ethereum.usd);
+ document.getElementById("solana-price").textContent = money(marketData.solana.usd);
+
+ document.getElementById("bitcoin-value").textContent = money(btcValue);
+ document.getElementById("ethereum-value").textContent = money(ethValue);
+ document.getElementById("solana-value").textContent = money(solValue);
+ document.getElementById("total-balance").textContent = money(total);
+
+ showChange("bitcoin-change",marketData.bitcoin.usd_24h_change);
+ showChange("ethereum-change",marketData.ethereum.usd_24h_change);
+ showChange("solana-change",marketData.solana.usd_24h_change);
+
+ updateAllocation([btcValue,ethValue,solValue],total);
+ updateMovers(marketData);
+}
+
+// ASSET ALLOCATION
+
+function updateAllocation(values,total) {
+ const shares = total > 0 ? values.map(value => value / total * 100) : [0,0,0];
+
+ document.getElementById("btc-share").textContent = shares[0].toFixed(1)+"%";
+ document.getElementById("eth-share").textContent = shares[1].toFixed(1)+"%";
+ document.getElementById("sol-share").textContent = shares[2].toFixed(1)+"%";
+
+ if (allocationChart) allocationChart.destroy();
+
+ allocationChart = new Chart(document.getElementById("allocationChart"),{
+  type:"doughnut",
+  data:{
+   labels:["Bitcoin","Ethereum","Solana"],
+   datasets:[{
+    data:values,
+    backgroundColor:["#f7931a","#668cff","#35d49a"],
+    borderWidth:0,
+    hoverOffset:8
+   }]
+  },
+  options:{
+   responsive:true,
+   maintainAspectRatio:false,
+   cutout:"70%",
+   plugins:{legend:{display:false}}
+  }
+ });
+}
+
+// TOP MOVERS
+
+function updateMovers(data) {
+ const coins = [
+  {name:"Bitcoin",symbol:"BTC",icon:"₿",color:"#f7931a",change:data.bitcoin.usd_24h_change},
+  {name:"Ethereum",symbol:"ETH",icon:"◆",color:"#668cff",change:data.ethereum.usd_24h_change},
+  {name:"Solana",symbol:"SOL",icon:"◎",color:"#35d49a",change:data.solana.usd_24h_change}
+ ];
+
+ coins.sort((a,b) => b.change-a.change);
+
+ document.getElementById("mover-list").innerHTML = coins.map(coin => `
+  <div class="mover">
+   <div class="mover-left">
+    <div class="mini-icon" style="background:${coin.color}22;color:${coin.color}">${coin.icon}</div>
+    <div>
+     <div class="mover-name">${coin.name}</div>
+     <div class="mover-symbol">${coin.symbol}</div>
+    </div>
+   </div>
+   <div class="mover-change ${coin.change >= 0 ? "positive" : "negative"}">
+    ${coin.change >= 0 ? "+" : ""}${coin.change.toFixed(2)}%
+   </div>
+  </div>
+ `).join("");
+}
+
+// MARKET ANALYSIS
+
+async function loadAnalysis() {
+ try {
+  const response = await fetch("http://127.0.0.1:8000/analysis");
+  if (!response.ok) throw new Error("Analysis unavailable");
+  const data = await response.json();
+  document.getElementById("market-trend").textContent = data.trend;
+  document.getElementById("market-prediction").textContent = data.prediction;
+  document.getElementById("risk-level").textContent = data.risk_level;
+ } catch(error) {
+  console.error("Analysis error:",error);
+ }
+}
+
+// PORTFOLIO HISTORY
+
+async function loadPortfolioHistory() {
+ try {
+  const response = await fetch("http://127.0.0.1:8000/comparison-history");
+  if (!response.ok) throw new Error("History unavailable");
+  historyData = await response.json();
+  renderPortfolioHistory();
+ } catch(error) {
+  console.error("Portfolio history error:",error);
+ }
+}
+
+function renderPortfolioHistory() {
+ if (!historyData) return;
+
+ const history = historyData.history;
+ const btc = history.bitcoin || [];
+ const eth = history.ethereum || [];
+ const sol = history.solana || [];
+ const count = Math.min(btc.length,eth.length,sol.length);
+
+ if (count < 2) return;
+
+ const values = [];
+ const labels = [];
+
+ for (let i=0;i<count;i++) {
+  values.push(
+   btc[i][1]*holdings.bitcoin +
+   eth[i][1]*holdings.ethereum +
+   sol[i][1]*holdings.solana
+  );
+  labels.push(new Date(btc[i][0]).toLocaleTimeString());
+ }
+
+ const startingValue = values[0];
+ const indexedValues = startingValue > 0
+  ? values.map(value => value/startingValue*100)
+  : values.map(() => 100);
+
+ if (portfolioChart) portfolioChart.destroy();
+
+ portfolioChart = new Chart(document.getElementById("portfolioChart"),{
+  type:"line",
+  data:{
+   labels:labels,
+   datasets:[{
+    label:"Portfolio Performance (Start = 100)",
+    data:indexedValues,
+    borderColor:"#5b9dff",
+    backgroundColor:"rgba(72,145,255,0.15)",
+    fill:true,
+    tension:0.4,
+    pointRadius:0,
+    borderWidth:2
+   }]
+  },
+  options:{
+   responsive:true,
+   maintainAspectRatio:false,
+   plugins:{legend:{labels:{color:"#c5d0e7"}}},
+   scales:{
+    x:{ticks:{color:"#8997b3",maxTicksLimit:6},grid:{color:"#26334a"}},
+    y:{ticks:{color:"#8997b3"},grid:{color:"#26334a"}}
+   }
+  }
+ });
+}
+
+// START DASHBOARD
+
+renderTransactions();
+checkBackend();
+loadMarkets();
+loadAnalysis();
+loadPortfolioHistory();
+
+setInterval(checkBackend,10000);
+setInterval(loadMarkets,120000);
+setInterval(loadAnalysis,120000);
+setInterval(loadPortfolioHistory,300000);
+
+</script>
+</body>
+</html>
