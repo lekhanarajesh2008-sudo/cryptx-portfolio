@@ -498,7 +498,7 @@ function renderTransactions() {
 async function checkBackend() {
  const status = document.getElementById("connection-status");
  try {
-  const response = await fetch("http://127.0.0.1:8000/health");
+  const response = await fetch("https://cryptx-portfolio-1.onrender.com/health");
   if (!response.ok) throw new Error("Backend unavailable");
   status.textContent = "● Backend Connected";
   status.style.background = "#102b29";
@@ -514,7 +514,7 @@ async function checkBackend() {
 
 async function loadMarkets() {
  try {
-  const response = await fetch("http://127.0.0.1:8000/markets");
+  const response = await fetch("https://cryptx-portfolio-1.onrender.com/markets");
   if (!response.ok) throw new Error("Market data unavailable");
   marketData = await response.json();
   renderPortfolio();
@@ -618,7 +618,7 @@ function updateMovers(data) {
 
 async function loadAnalysis() {
  try {
-  const response = await fetch("http://127.0.0.1:8000/analysis");
+  const response = await fetch("https://cryptx-portfolio-1.onrender.com/analysis");
   if (!response.ok) throw new Error("Analysis unavailable");
   const data = await response.json();
   document.getElementById("market-trend").textContent = data.trend;
@@ -633,7 +633,7 @@ async function loadAnalysis() {
 
 async function loadPortfolioHistory() {
  try {
-  const response = await fetch("http://127.0.0.1:8000/comparison-history");
+  const response = await fetch("https://cryptx-portfolio-1.onrender.com/comparison-history");
   if (!response.ok) throw new Error("History unavailable");
   historyData = await response.json();
   renderPortfolioHistory();
