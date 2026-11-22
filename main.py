@@ -1,6 +1,8 @@
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pathlib import Path
 
 import requests
 import time
@@ -386,14 +388,17 @@ def get_data(key, endpoint, params):
 # ==================================================
 # HOME
 # ==================================================
-
-@app.get("/")
+@app.get("/", include_in_schema=False)
 def home():
+    frontend_file = Path(__file__).resolve().parent / "index.html"
 
-    return {
-        "message": "CRYPTX API is running",
-        "status": "online"
-    }
+    if not frontend_file.is_file():
+        raise HTTPException(
+            status_code=500,
+            detail="index.html was not found beside main.py"
+        )
+
+    return FileResponse(frontend_file)
 
 
 # ==================================================
