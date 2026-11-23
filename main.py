@@ -7,6 +7,7 @@ from pathlib import Path
 import requests
 import time
 import threading
+import os
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
@@ -586,3 +587,4 @@ def comparison_history():
 # ==================================================
 # END OF CRYPTX BACKEND
 # ==================================================
+
