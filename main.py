@@ -1,15 +1,15 @@
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pathlib import Path
 
-import requests
-import time
-import threading
 import os
+import threading
+import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+
+import requests
 
 
 # ==================================================
@@ -32,8 +32,7 @@ app.add_middleware(
 
 
 # ==================================================
-# COINGECKO PUBLIC API
-# No API key required
+# COINGECKO API CONFIGURATION
 # ==================================================
 
 BASE_URL = "https://api.coingecko.com/api/v3"
@@ -42,35 +41,29 @@ HEADERS = {
     "Accept": "application/json",
     "User-Agent": "CRYPTX-Crypto-Portfolio/2.0"
 }
-COINGECKO_API_KEY = os.getenv("COINGECKO_API_KEY")
 
+COINGECKO_API_KEY = os.getenv("COINGECKO_API_KEY")
 if COINGECKO_API_KEY:
     HEADERS["x-cg-demo-api-key"] = COINGECKO_API_KEY
 
-# Cache durations
+
+# ==================================================
+# CACHE AND COOLDOWN CONFIGURATION
+# ==================================================
+
 MARKET_CACHE_SECONDS = 120
 HISTORY_CACHE_SECONDS = 300
-COMPARISON_CACHE_SECONDS = 600
+COMPARISON_CACHE_SECONDS = 300
 
-# Maximum age of cached data used during an outage
-MAX_STALE_CACHE_SECONDS = 86400
+MAX_STALE_CACHE_SECONDS = 1800
 
-# Cooldown defaults
 DEFAULT_429_COOLDOWN = 60
-SERVER_ERROR_COOLDOWN = 20
-CONNECTION_ERROR_COOLDOWN = 15
+SERVER_ERROR_COOLDOWN = 30
+CONNECTION_ERROR_COOLDOWN = 30
 
-# Cache format:
-# key: (timestamp, data)
 cache = {}
-
-# Global CoinGecko rate-limit cooldown
 rate_limit_until = 0
-
-# Per-endpoint cooldown after temporary failures
 endpoint_cooldowns = {}
-
-# Prevent simultaneous upstream requests
 request_lock = threading.Lock()
 
 
@@ -79,26 +72,21 @@ request_lock = threading.Lock()
 # ==================================================
 
 def get_retry_after(response):
-
     retry_after = response.headers.get("Retry-After")
 
     if not retry_after:
         return DEFAULT_429_COOLDOWN
 
-    # Retry-After may contain seconds
     try:
         return max(1, int(retry_after))
     except (ValueError, TypeError):
         pass
 
-    # Or it may contain an HTTP date
     try:
         retry_date = parsedate_to_datetime(retry_after)
 
         if retry_date.tzinfo is None:
-            retry_date = retry_date.replace(
-                tzinfo=timezone.utc
-            )
+            retry_date = retry_date.replace(tzinfo=timezone.utc)
 
         seconds = (
             retry_date - datetime.now(timezone.utc)
@@ -114,28 +102,7 @@ def get_retry_after(response):
 # CACHE HELPERS
 # ==================================================
 
-def get_cached_data(key, allow_stale=False):
-
-    entry = cache.get(key)
-
-    if entry is None:
-        return None
-
-    saved_time, saved_data = entry
-
-    age = time.time() - saved_time
-
-    if allow_stale:
-        if age <= MAX_STALE_CACHE_SECONDS:
-            return saved_data
-
-        return None
-
-    return saved_data if age < get_cache_duration(key) else None
-
-
 def get_cache_duration(key):
-
     if key == "markets":
         return MARKET_CACHE_SECONDS
 
@@ -148,8 +115,22 @@ def get_cache_duration(key):
     return MARKET_CACHE_SECONDS
 
 
-def save_cache(key, data):
+def get_cached_data(key, allow_stale=False):
+    entry = cache.get(key)
 
+    if entry is None:
+        return None
+
+    saved_time, saved_data = entry
+    age = time.time() - saved_time
+
+    if allow_stale:
+        return saved_data if age <= MAX_STALE_CACHE_SECONDS else None
+
+    return saved_data if age < get_cache_duration(key) else None
+
+
+def save_cache(key, data):
     cache[key] = (time.time(), data)
 
 
@@ -158,7 +139,6 @@ def save_cache(key, data):
 # ==================================================
 
 def unavailable(message, retry_after=None):
-
     detail = {
         "message": message,
         "source": "CoinGecko"
@@ -167,14 +147,9 @@ def unavailable(message, retry_after=None):
     headers = None
 
     if retry_after is not None:
-
         retry_after = max(1, int(retry_after))
-
         detail["retry_after_seconds"] = retry_after
-
-        headers = {
-            "Retry-After": str(retry_after)
-        }
+        headers = {"Retry-After": str(retry_after)}
 
     raise HTTPException(
         status_code=503,
@@ -188,71 +163,48 @@ def unavailable(message, retry_after=None):
 # ==================================================
 
 def get_data(key, endpoint, params):
-
     global rate_limit_until
 
-    now = time.time()
-
-    # 1. Return fresh cache immediately
+    # Return fresh cached data without making a network request.
     cached = get_cached_data(key)
-
     if cached is not None:
         return cached
 
-    # 2. Only one request to CoinGecko at a time
+    # Serialize CoinGecko requests and check the cache again after waiting.
     with request_lock:
-
-        # Check cache again after waiting
         cached = get_cached_data(key)
-
         if cached is not None:
             return cached
 
         now = time.time()
 
-        # 3. Respect global 429 cooldown
+        # Respect the global rate-limit cooldown.
         if now < rate_limit_until:
-
-            stale = get_cached_data(
-                key,
-                allow_stale=True
-            )
-
+            stale = get_cached_data(key, allow_stale=True)
             if stale is not None:
                 return stale
 
             remaining = int(rate_limit_until - now) + 1
-
             unavailable(
-                "CoinGecko rate limit is active. "
-                "Please wait before requesting fresh data.",
+                "CoinGecko rate limit is active. Please wait before requesting fresh data.",
                 remaining
             )
 
-        # 4. Respect endpoint-specific cooldown
+        # Respect endpoint-specific cooldowns.
         endpoint_wait = endpoint_cooldowns.get(key, 0)
-
         if now < endpoint_wait:
-
-            stale = get_cached_data(
-                key,
-                allow_stale=True
-            )
-
+            stale = get_cached_data(key, allow_stale=True)
             if stale is not None:
                 return stale
 
             remaining = int(endpoint_wait - now) + 1
-
             unavailable(
                 "This data endpoint is temporarily unavailable.",
                 remaining
             )
 
-        # 5. Make exactly ONE request.
-        # No automatic retries.
+        # Make exactly one request. No automatic retries.
         try:
-
             response = requests.get(
                 BASE_URL + endpoint,
                 params=params,
@@ -260,47 +212,31 @@ def get_data(key, endpoint, params):
                 timeout=15
             )
 
-            # Handle rate limiting
+            # Handle CoinGecko rate limiting.
             if response.status_code in (418, 429):
-
                 cooldown = get_retry_after(response)
-
                 rate_limit_until = time.time() + cooldown
 
-                stale = get_cached_data(
-                    key,
-                    allow_stale=True
-                )
-
+                stale = get_cached_data(key, allow_stale=True)
                 if stale is not None:
                     return stale
 
                 unavailable(
-                    "CoinGecko rate limit reached. "
-                    "Please wait before trying again.",
+                    "CoinGecko rate limit reached. Please wait before trying again.",
                     cooldown
                 )
 
-            # Handle CoinGecko server errors
+            # Handle upstream server errors before raise_for_status().
             if response.status_code >= 500:
-
                 cooldown = SERVER_ERROR_COOLDOWN
+                endpoint_cooldowns[key] = time.time() + cooldown
 
-                endpoint_cooldowns[key] = (
-                    time.time() + cooldown
-                )
-
-                stale = get_cached_data(
-                    key,
-                    allow_stale=True
-                )
-
+                stale = get_cached_data(key, allow_stale=True)
                 if stale is not None:
                     return stale
 
                 unavailable(
-                    "CoinGecko is temporarily experiencing "
-                    "server problems.",
+                    "CoinGecko is temporarily experiencing server problems.",
                     cooldown
                 )
 
@@ -308,48 +244,30 @@ def get_data(key, endpoint, params):
 
             data = response.json()
 
-            # 6. Save successful data
+            # Cache successful responses and clear this endpoint's cooldown.
             save_cache(key, data)
-
-            # Clear endpoint cooldown after success
             endpoint_cooldowns.pop(key, None)
 
             return data
 
         except requests.exceptions.Timeout:
-
             cooldown = CONNECTION_ERROR_COOLDOWN
+            endpoint_cooldowns[key] = time.time() + cooldown
 
-            endpoint_cooldowns[key] = (
-                time.time() + cooldown
-            )
-
-            stale = get_cached_data(
-                key,
-                allow_stale=True
-            )
-
+            stale = get_cached_data(key, allow_stale=True)
             if stale is not None:
                 return stale
 
-            unavailable(
-                "CoinGecko request timed out.",
-                cooldown
-            )
+            unavailable("CoinGecko request timed out.", cooldown)
 
         except requests.exceptions.HTTPError as error:
-
             status = (
                 error.response.status_code
                 if error.response is not None
                 else None
             )
 
-            stale = get_cached_data(
-                key,
-                allow_stale=True
-            )
-
+            stale = get_cached_data(key, allow_stale=True)
             if stale is not None:
                 return stale
 
@@ -363,36 +281,27 @@ def get_data(key, endpoint, params):
             )
 
         except requests.exceptions.RequestException:
-
             cooldown = CONNECTION_ERROR_COOLDOWN
+            endpoint_cooldowns[key] = time.time() + cooldown
 
-            endpoint_cooldowns[key] = (
-                time.time() + cooldown
-            )
-
-            stale = get_cached_data(
-                key,
-                allow_stale=True
-            )
-
+            stale = get_cached_data(key, allow_stale=True)
             if stale is not None:
                 return stale
 
-            unavailable(
-                "Unable to connect to CoinGecko.",
-                cooldown
-            )
+            unavailable("Unable to connect to CoinGecko.", cooldown)
 
         except ValueError:
+            stale = get_cached_data(key, allow_stale=True)
+            if stale is not None:
+                return stale
 
-            unavailable(
-                "CoinGecko returned invalid JSON data."
-            )
+            unavailable("CoinGecko returned invalid JSON data.")
 
 
 # ==================================================
 # HOME
 # ==================================================
+
 @app.get("/", include_in_schema=False)
 def home():
     frontend_file = Path(__file__).resolve().parent / "index.html"
@@ -412,7 +321,6 @@ def home():
 
 @app.get("/health")
 def health():
-
     return {
         "status": "healthy",
         "service": "CRYPTX API"
@@ -425,11 +333,7 @@ def health():
 
 @app.get("/api/status")
 def api_status():
-
-    remaining = max(
-        0,
-        int(rate_limit_until - time.time())
-    )
+    remaining = max(0, int(rate_limit_until - time.time()))
 
     return {
         "status": "online",
@@ -443,7 +347,6 @@ def api_status():
 # ==================================================
 
 def get_market_data():
-
     return get_data(
         key="markets",
         endpoint="/simple/price",
@@ -457,7 +360,6 @@ def get_market_data():
 
 @app.get("/markets")
 def markets():
-
     return get_market_data()
 
 
@@ -467,7 +369,6 @@ def markets():
 
 @app.get("/crypto")
 def crypto_data():
-
     data = get_market_data()
 
     return {
@@ -484,27 +385,18 @@ def crypto_data():
 
 @app.get("/analysis")
 def analysis():
-
     data = get_market_data()
-
-    change = (
-        data["bitcoin"].get("usd_24h_change", 0) or 0
-    )
+    change = data["bitcoin"].get("usd_24h_change", 0) or 0
 
     if change > 2:
-
         trend = "Bullish"
         prediction = "Positive momentum"
         risk = "Moderate"
-
     elif change < -2:
-
         trend = "Bearish"
         prediction = "Negative momentum"
         risk = "High"
-
     else:
-
         trend = "Sideways"
         prediction = "Market is relatively stable"
         risk = "Moderate"
@@ -522,7 +414,6 @@ def analysis():
 # ==================================================
 
 def get_bitcoin_history():
-
     data = get_data(
         key="bitcoin_history",
         endpoint="/coins/bitcoin/market_chart",
@@ -532,26 +423,21 @@ def get_bitcoin_history():
         }
     )
 
-    return {
-        "prices": data.get("prices", [])
-    }
+    return {"prices": data.get("prices", [])}
 
 
 @app.get("/history")
 def history():
-
     return get_bitcoin_history()
 
 
 @app.get("/portfolio/history")
 def portfolio_history():
-
     return get_bitcoin_history()
 
 
 @app.get("/portfolio-history")
 def portfolio_history_alias():
-
     return get_bitcoin_history()
 
 
@@ -561,17 +447,10 @@ def portfolio_history_alias():
 
 @app.get("/comparison-history")
 def comparison_history():
-
-    coins = [
-        "bitcoin",
-        "ethereum",
-        "solana"
-    ]
-
+    coins = ["bitcoin", "ethereum", "solana"]
     result = {}
 
     for coin in coins:
-
         data = get_data(
             key=coin + "_comparison",
             endpoint="/coins/" + coin + "/market_chart",
@@ -583,13 +462,9 @@ def comparison_history():
 
         result[coin] = data.get("prices", [])
 
-    return {
-        "history": result
-    }
+    return {"history": result}
 
 
 # ==================================================
 # END OF CRYPTX BACKEND
 # ==================================================
-
-
