@@ -42,6 +42,10 @@ HEADERS = {
     "Accept": "application/json",
     "User-Agent": "CRYPTX-Crypto-Portfolio/2.0"
 }
+COINGECKO_API_KEY = os.getenv("COINGECKO_API_KEY")
+
+if COINGECKO_API_KEY:
+    HEADERS["x-cg-demo-api-key"] = COINGECKO_API_KEY
 
 # Cache durations
 MARKET_CACHE_SECONDS = 120
@@ -587,4 +591,5 @@ def comparison_history():
 # ==================================================
 # END OF CRYPTX BACKEND
 # ==================================================
+
 
